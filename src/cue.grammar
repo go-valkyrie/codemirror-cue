@@ -1,0 +1,116 @@
+/**
+ * MIT License
+ *
+ * Copyright (c) 2025 Stefan Nuxoll
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in all
+ * copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+ * SOFTWARE.
+ */
+@top File { (PackageDefinition comma)? (ImportStatement comma)* (Declaration)*}
+
+@skip { space | newline | LineComment }
+
+@precedence { unify @left, disjunct @left }
+
+@tokens {
+    PackageKeyword { "package" }
+    ImportKeyword { "import" }
+    "("
+    ")"
+    "{"
+    "}"
+    "?"
+    "\""
+    ellipses { "..." }
+    unify_op { "&" }
+    disjunct_op { "|" }
+    Comma { "," }
+    ":"
+    newline[@export] { $[\n] }
+    LineComment { "//" ![\n]* }
+    space[@export] { $[ \t] }
+}
+
+@context trackNewline from "./tokens"
+
+@external tokens tokenizeLiterals from "./tokens" {
+    unicodeLetter
+    unicodeNumber
+}
+
+Identifier { "_"? "#"? unicodeLetter (unicodeLetter | unicodeNumber)* }
+PackageDefinition {PackageKeyword PackageName}
+PackageName { unicodeLetter (unicodeLetter | unicodeNumber)* }
+
+
+ImportStatement {ImportKeyword (ImportSpec | ImportList)}
+ImportList { "(" (ImportSpec comma)* ")" }
+ImportSpec { ImportAlias? ImportPath}
+ImportAlias { Identifier }
+ImportPath { StringLiteral }
+
+Declaration[@isGroup=Declarations] {
+    (Field | Embedding | Ellipsis) comma
+}
+Ellipsis {
+    ellipses
+}
+Embedding { AliasExpr }
+Field { (Label ":")+ AliasExpr }
+Label { LabelName }
+LabelName { Identifier | stringLabel }
+stringLabel { StringLiteral }
+
+AliasExpr { (Identifier "=")? Expression}
+
+Literal { BasicLiteral | StructLiteral }
+BasicLiteral { IntLiteral | StringLiteral }
+IntLiteral { unicodeNumber* }
+Expression { UnaryExpr | BinaryExpr }
+Operand { Literal | OperandName }
+BinaryExpr {
+    (Expression !unify unify_op Expression) |
+    (Expression !disjunct disjunct_op Expression)
+}
+PrimaryExpr { Operand }
+UnaryExpr { PrimaryExpr }
+
+OperandName { Identifier | QualifiedIdentifier }
+QualifiedIdentifier { PackageName "." Identifier }
+
+StructLiteral { "{" (Declaration)+ "}" }
+
+@local tokens {
+    stringEnd[@name='"'] { $["\n]}
+    @else unicodeChar
+}
+
+@skip {} {
+    StringLiteral { "\"" StringContent stringEnd }
+    StringContent { StringText }
+    StringText { unicodeChar* }
+}
+
+comma { Comma | implicitComma}
+
+@external tokens insertComma from "./tokens" {
+    implicitComma
+}
+
+@external propSource cueHighlight from './highlight'
+@detectDelim
